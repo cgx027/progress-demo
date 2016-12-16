@@ -2,6 +2,7 @@
 
 import React, { Component, PropTypes } from 'react';
 import { Link } from 'react-router';
+import radium from 'radium';
 
 import {
     LinearProgress,
@@ -17,6 +18,7 @@ import {
 
 import TaskProgress from './TaskProgress';
 
+@radium
 export default class GraphProgressTable extends Component {
 
     defaultProps = {
@@ -28,12 +30,17 @@ export default class GraphProgressTable extends Component {
     renderHeader = () => {
         if(this.props.showHeader) {
             return (
-                <TableHeader displaySelectAll={false}>
+                <TableHeader
+                    displaySelectAll={false}
+                    enableSelectAll={false}
+                    adjustForCheckbox={false}
+                >
                     <TableRow>
-                        <TableHeaderColumn>Graph/Task</TableHeaderColumn>
+                        <TableHeaderColumn></TableHeaderColumn>
                         <TableHeaderColumn>Name</TableHeaderColumn>
                         <TableHeaderColumn>Id</TableHeaderColumn>
                         <TableHeaderColumn>Description</TableHeaderColumn>
+                        <TableHeaderColumn>Status</TableHeaderColumn>
                         <TableHeaderColumn>Progress</TableHeaderColumn>
                     </TableRow>
                 </TableHeader>
@@ -41,28 +48,52 @@ export default class GraphProgressTable extends Component {
         }
     }
 
+    renderTasks = () => {
+        let self = this;
+
+        let taskIds = Object.keys(this.props.graphData.tasks);
+
+        console.log('----in GraphProgressTable', this.props.graphData);
+
+        let taskProgressElementList = [];
+
+        taskIds.forEach(function(taskId){
+            let taskData = self.props.graphData.tasks[taskId];
+
+            console.log('----in GraphProgressTable, taskData', taskData);
+
+            taskProgressElementList.push(
+                <TaskProgress
+                    key={taskId}
+                    type=""
+                    name={taskData.taskName}
+                    id={taskId}
+                    value={taskData.taskProgress}
+                    status={taskData.taskStatus}
+                    description={taskData.taskDesc}
+                />
+            );
+        });
+
+        return taskProgressElementList;
+    }
+
     render(){
         return (
             <div>
-                <Table>
+                <Table style={{tableLayout: 'fixed', align: 'left'}}>
                     {this.renderHeader()}
                     <TableBody displayRowCheckbox={false}>
                         <TaskProgress
-                            key={this.props.graphId}
+                            key={this.props.graphData.graphId}
                             type="Graph"
-                            name={this.props.graphName}
-                            id={this.props.graphId}
-                            value={this.props.graphProgress}
-                            description={this.props.graphDesc}
+                            name={this.props.graphData.graphName}
+                            id={this.props.graphData.graphId}
+                            value={this.props.graphData.graphProgress}
+                            status={this.props.graphData.graphStatus}
+                            description={this.props.graphData.graphDesc}
                         />
-                        <TaskProgress
-                            key={this.props.taskId}
-                            type="Task"
-                            name={this.props.taskName}
-                            id={this.props.taskId}
-                            value={this.props.taskProgress}
-                            description={this.props.taskDesc}
-                        />
+                        {this.renderTasks()}
                     </TableBody>
                 </Table>
                 <Divider />

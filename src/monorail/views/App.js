@@ -3,6 +3,8 @@
 import React, { Component, PropTypes } from 'react';
 import { Link } from 'react-router';
 
+import merge from 'lodash/merge';
+
 import RackHDRestAPIv2_0 from 'src-common/messengers/RackHDRestAPIv2_0';
 import ProgressEventsMessenger from 'src-common/messengers/ProgressEventsMessenger';
 import AppContainer from 'src-common/views/AppContainer';
@@ -43,16 +45,20 @@ export default class App extends Component {
                     {identifier: graphId}
                 )
                     .then(function(workflows){
+                        console.log('API result: ', workflows.obj);
+
                         if(workflows.obj.status === 'cancelled') {
                             return;
                         }
 
-                        self.graphProgressCollection[graphId] = self.decodeProgressMsg(msg);
+                        self.graphProgressCollection[graphId] = {};
 
-                        self.graphProgressCollection[graphId].graphProgress =
-                            self.calcGraphProgress(workflows.obj.tasks);
+                        merge(
+                            self.graphProgressCollection[graphId],
+                            self.decodeApiResult(workflows.obj),
+                            self.decodeMsg(msg)
+                        );
 
-                        console.log('-----graphState', workflows.obj.status);
                         console.log('-----graphProgressCollection', self.graphProgressCollection);
 
                         self.setState(self.graphProgressCollection);
@@ -116,16 +122,16 @@ export default class App extends Component {
             return "0%";
         }
 
-        let succeededTaskCount = 0;
+        let finishedTaskCount = 0;
 
         tasks.forEach(function(task){
-            if(task.state === 'succeeded') {
-                succeededTaskCount += 1;
+            if(task.state === 'succeeded' || task.state === 'failed') {
+                finishedTaskCount += 1;
             }
         });
 
-        let progress = (succeededTaskCount*100/totalTaskCount);
-        console.log('taskProgress Info: ', progress, totalTaskCount, succeededTaskCount);
+        let progress = (finishedTaskCount*100/totalTaskCount);
+        console.log('taskProgress Info: ', progress, totalTaskCount, finishedTaskCount);
 
         return progress;
     }
@@ -134,23 +140,48 @@ export default class App extends Component {
         return msg.data.graphId;
     }
 
-    decodeProgressMsg = (msg) => {
+    decodeApiResult = (apiResult) => {
+        var ret = {};
+        ret.graphStatus = apiResult.status;
+        ret.graphProgress = this.calcGraphProgress(apiResult.tasks);
+
+        ret['tasks'] = {};
+
+        apiResult.tasks.forEach(function(task) {
+            let taskProgress = 0;
+
+            if (task.state === 'succeeded' || task.state === 'failed') {
+                taskProgress = 100;
+            }
+            ret['tasks'][task.instanceId] = {
+                taskName: task.label,
+                taskStatus: task.state,
+                taskProgress: taskProgress,
+                taskDesc: task.label
+            }
+        });
+
+        console.log('----decoded message from ApiResult', ret)
+
+        return ret;
+    }
+
+    decodeMsg = (msg) => {
         let ret = {};
-        ret.graphProgress = this.formatProgress(msg.data.progress.percentage);
+        // ret.graphProgress = this.formatProgress(msg.data.progress.percentage);
         ret.graphDesc = msg.data.progress.description;
         ret.graphName = msg.data.graphName;
         ret.graphId = msg.data.graphId;
 
+        ret['tasks'] = {};
+
         if(msg.data.taskProgress) {
-            ret.taskProgress = this.formatProgress(msg.data.taskProgress.progress.percentage);
-            ret.taskDesc = msg.data.taskProgress.progress.description;
-            ret.taskName = msg.data.taskProgress.taskName;
-            ret.taskId = msg.data.taskProgress.taskId;
-        } else {
-            ret.taskProgress = 0;
-            ret.taskDesc = 'No active task';
-            ret.taskName = 'No active task';
-            ret.taskId = 'No active task';
+            let taskId = msg.data.taskProgress.taskId;
+            ret['tasks'][taskId] = {
+                taskProgress: this.formatProgress(msg.data.taskProgress.progress.percentage),
+                taskDesc: msg.data.taskProgress.progress.description,
+                taskName: msg.data.taskProgress.taskName
+            }
         }
 
         console.log('decoded progress from Msg: ', ret);
@@ -197,20 +228,13 @@ export default class App extends Component {
             let graphState = self.state[graphId];
 
             graphProgressElements.push(
-            <div>
-                <GraphProgressTable
-                    key={graphId}
-                    showHeader={showHeader}
-                    graphName={graphState.graphName}
-                    graphId={graphState.graphId}
-                    graphProgress={graphState.graphProgress}
-                    graphDesc={graphState.graphDesc}
-                    taskName={graphState.taskName}
-                    taskId={graphState.taskId}
-                    taskProgress={graphState.taskProgress}
-                    taskDesc={graphState.taskDesc}
-                />
-            </div>
+                <div>
+                    <GraphProgressTable
+                        key={graphId}
+                        showHeader={showHeader}
+                        graphData={graphState}
+                    />
+                </div>
             )
 
             showHeader = false;
